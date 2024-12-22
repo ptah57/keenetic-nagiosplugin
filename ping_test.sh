@@ -11,6 +11,7 @@ OK=0
 WARNING=1
 CRITICAL=2
 UNKNOWN=3
+Flag=3
 
 # Internal variables
 TRUE=1
@@ -20,7 +21,10 @@ DEBUG=$FALSE
 VERBOSE=$FALSE
 
 WL=0.0
+WC=0.0
 WCparam=0.0
+Crst=0
+Wrst=0
 
 # PING variables
 PING_HOST=""
@@ -50,7 +54,7 @@ check_ip() {
         return 1
       fi
     done
-    echo "IP адрес корректен."
+#    echo "IP адрес корректен."
     return 0
   else
     echo "Некорректный формат IP адреса."
@@ -76,7 +80,7 @@ help_version() {
 ##########################################################################################
 exit_abnormal() {                         # Функция для выхода в случае ошибки.
   help_usage
-  exit 1
+  exit 2
 }
 ##########################################################################################
 myself=$0
@@ -85,7 +89,8 @@ check_w_arg() {
 # Регулярное выражение
   regex='^[0-9]{1,4}\.[0-9]{1,2},[0-9]{1,2}%+$' 
   if [[ $LEVEL_WARNING =~ $regex ]]; then
-    echo "Строка аргумента параметра -w соответствует шаблону."
+     :
+#    echo "Строка аргумента параметра -w соответствует шаблону."
   else
     echo "Строка аргумента параметра -w не соответствует шаблону."
     exit_abnormal
@@ -96,7 +101,8 @@ check_c_arg() {
 # Регулярное выражение
   regex='^[0-9]{1,4}\.[0-9]{1,2},[0-9]{1,2}%+$'
   if [[ $LEVEL_CRITICAL =~ $regex ]]; then
-    echo "Строка аргумента параметра -c соответствует шаблону."
+     :
+#    echo "Строка аргумента параметра -c соответствует шаблону."
   else
     echo "Строка аргумента параметра -c не соответствует шаблону."
     exit_abnormal
@@ -166,16 +172,21 @@ while getopts "H:w:c:" options; do         # Цикл: выбора опций �
 #################################################################################################  
 echo "@=$@"
 echo "--------------------------------------------------------"
-WL=$( echo $LEVEL_WARNING | cut -f1 -d ',')
+WL=$( echo $LEVEL_WARNING  | cut -f1 -d ',')
+WC=$( echo $LEVEL_CRITICAL | cut -f1 -d ',')
 PingOut="$($Mypath$Program -c $PING_PACKETS -4 $PING_HOST)"
 WCparam="$(echo "$PingOut" | grep min/avg/max | cut -f2 -d '=' | cut -f2 -d '/' ) "
 PING_PrLOSS="$(echo "$PingOut" | grep -oP '\d+(?=% packet loss)')"
 echo "WCparam=$WCparam"
 echo "PING_PrLOSS=$PING_PrLOSS"
 echo "LEVEL_WARNING = $LEVEL_WARNING"
+echo "LEVEL_CRITICAL= $LEVEL_CRITICAL"
+echo "WC = $WC"
 echo "WL = $WL"
-st=$(echo "$WL>$WCparam" | /opt/bin/bc -l)
-echo "st=$st"
+Crst=$( /opt/bin/echo "$WCparam>$WC" | /opt/bin/bc -l )
+Wrst=$( echo "$WCparam>$WL" | /opt/bin/bc -l )
+echo "Crst=$Crst"
+echo "Wrst=$Wrst"
 echo "--------------------------------------------------------"
 #################################################################################################
 #  проверяем и выводим результат 
@@ -184,10 +195,19 @@ echo "--------------------------------------------------------"
 
 echo "$PingOut" | tail -4
 
-if [ $st -eq 1 ] 
+if [ $Crst -eq 1 ] 
   then
-  echo " EXIT ==== $OK"
-  exit $OK
+  echo " EXIT ==== $CRITICAL"
+  exit $CRITICAL
 fi
 
-exit 0
+
+if [ $Wrst -eq 1 ] 
+  then
+  echo " EXIT ==== $WARNING"
+  exit $WARNING
+fi
+
+  echo " EXIT ==== $OK"
+  exit $OK
+
