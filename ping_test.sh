@@ -5,26 +5,28 @@ Mypath="/opt/bin/"
 
 Program="ping"
 ###############################################################################################
-# Return states
-st=0
+# Возвращаемый статус (код результата работы скрипта)
 OK=0
 WARNING=1
 CRITICAL=2
 UNKNOWN=3
-Flag=""
 
-# Internal variables
-TRUE=1
-FALSE=0
-ERROR=1
-DEBUG=$FALSE
-VERBOSE=$FALSE
+# Вспомогательные переменныe
 
-WL=0.0
-WC=0.0
-WCparam=0.0
-Crst=0
-Wrst=0
+WL=0.00                          # цифровая часть параметра LEVEL_WARNING
+WC=0.00                          # цифровая часть параматра LEVEL_CRITICAL
+PWL=0                            # цифровая часть параметра % LEVEL_WARNING
+PCL=0                            # цифровая часть параметра % LEVEL_CRITICAL
+WCparam=0.00                     # значение average из вывода команды ping
+                                 # с ним будет сравниваться значение передаваемых параметров
+PWCparam=0                       # % loss packets
+
+Crst=0                           # флаг сравнения с критическим значением параметров
+Wrst=0                           # флаг сравнения с предупредительным значением параметров
+PCrst=0                          # флаг сравнения с критическим значением % потерь
+PWrst=0                          # флаг сравнения с предупредительным значением % потерь
+Flag=""                          # строка вывода 
+
 
 # PING variables
 PING_HOST=""
@@ -35,13 +37,13 @@ PingOut="_ 0 _"
 PING_PrLOSS=0
 
 # Check variables
-LEVEL_WARNING=100,10%
-LEVEL_CRITICAL=500,40%
-PING_PL=100 # Default value to package lost
-PING_AT=0 # Default value to averange time
+LEVEL_WARNING=300.10,10%i        # соответствует значению парметра ключа -w по умолчанию
+LEVEL_CRITICAL=500.20,40%        # соответствует значению парметра ключа -c по умолчанию
+PING_PL=99 # Default value to package lost # соответствует значению парметра ключа -p по умолчанию
+PING_AT=0.00 # Default value to averange time # пока не используется - используется аналог WCparam
 
 ##########################################################################################
-#source /opt/lib/check_ip.sh
+#source /opt/lib/check_ip.sh     #  в случае выноса функции в отдельную библиотеку
 ##########################################################################################
 
 check_ip() {
@@ -54,7 +56,7 @@ check_ip() {
         return 1
       fi
     done
-#    echo "IP адрес корректен."
+#    echo "IP адрес корректен."   #  не загромождать вывод ,  использовать только для отладки
     return 0
   else
     echo "Некорректный формат IP адреса."
@@ -74,11 +76,12 @@ help_usage() {
 ##########################################################################################
 help_version() {
     echo "_______________________________________________________"
-    echo "check_ping.sh ( analog nagios-plugins check_ping ) v. 0.01"
-    echo "2024 Ptah57 Oziris <ptah57@mail.ru>"
+    echo "ping_test.sh ( это аналог плагина nagios-plugins check_ping ) v. 0.01"
+    echo "автор Ptah57 Oziris <ptah57@mail.ru 2024 г. >"
 }
 ##########################################################################################
 exit_abnormal() {                         # Функция для выхода в случае ошибки.
+  help_version
   help_usage
   exit 2
 }
@@ -143,7 +146,7 @@ echo "--------------------------------------------------------"
 ##############################################################################################
 if [[ -z "$1" ]] 
 then
-        echo "Missing parameters! Syntax: ./`basename $0` -H PING_HOST -w (warning,%) -c (critical,%) "
+        echo "Отсутствуют параметры ! Используется форма: ./`basename $0` < -h или --help> <-v или --version> -H PING_HOST -w (warning,%) -c (critical,%) -p (ping count)"
 	help_version
 	help_usage
         exit 3
@@ -153,12 +156,9 @@ if [ "$1" = "-h" -o "$1" = "--help" -o "$1" = "-v" -o "$1" = "--version" ]
 then
 	help_version
 	echo ""
-	echo "This shell plugin will check if ping host  is ok."
-	echo ""
 	help_usage
 	echo ""
-	echo "Required Arguments:"
-	echo " -H HOST -w ## -c ## -p ##"
+	echo "Используется форма: ./`basename $0` < -h или --help> <-v или --version> -H PING_HOST -w (warning,%) -c (critical,%) -p (ping count)"
 	echo ""
 	exit 3
 fi
@@ -191,7 +191,7 @@ while getopts "H:w:c:p:" options; do         # Цикл: выбора опций
 
       ;;
     :)                                    # Если ожидаемый аргумент опущен:
-      echo "Error: -${OPTARG} requires an argument."
+      echo "Error: -${OPTARG} здесь требуется параметр ."
       exit_abnormal                       # Ненормальный выход.
       ;;
     *)                                    # Если встретилась неизвестная опция:
@@ -206,21 +206,25 @@ while getopts "H:w:c:p:" options; do         # Цикл: выбора опций
 
 WL=$( echo $LEVEL_WARNING  | cut -f1 -d ',')
 WC=$( echo $LEVEL_CRITICAL | cut -f1 -d ',')
+PWL=$( echo $LEVEL_WARNING  | cut -f2 -d ',' | sed 's/%//g' )
+PCL=$( echo $LEVEL_CRITICAL | cut -f2 -d ',' | sed 's/%//g' )
 PingOut="$($Mypath$Program -c $PING_PACKETS -4 $PING_HOST)"
 Flag=$( echo "$PingOut" | tail -4)
 WCparam="$(echo "$PingOut" | grep min/avg/max | cut -f2 -d '=' | cut -f2 -d '/' ) "
 PING_PrLOSS="$(echo "$PingOut" | grep -oP '\d+(?=% packet loss)')"
 Crst=$( /opt/bin/echo "$WCparam>$WC" | /opt/bin/bc -l )
 Wrst=$( echo "$WCparam>$WL" | /opt/bin/bc -l )
+PCrst=$( echo "$PING_PrLOSS>$PCL" | /opt/bin/bc -l )
+PWrst$( echo "$PING_PrLOSS>$PWL" | /opt/bin/bc -l )
 
-if [ $Crst -eq 1 ] 
+if [ $Crst -eq 1 ] || [ $PCrst -eq 1 ] 
   then
   echo "SERVICE STATUS: CRITICAL $PingOut"
   exit $CRITICAL
 fi
 
 
-if [ $Wrst -eq 1 ] 
+if [ $Wrst -eq 1 ] || [ $PWrst -eq 1 ]
   then
   echo "SERVICE STATUS: WARNING $PingOut"
   exit $WARNING
