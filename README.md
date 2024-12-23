@@ -1,4 +1,6 @@
-# ping_test
+# keenetic_nagiosplugin 
+# Этот набор включает в себя сейчас следущие плагины , сделанные специально под Кинетик:
+# ping_test.sh 
 Плагин для Nagios 3.5.1 для роутера Keenetic GIGA III с установленной средой entware
 Написан на bash для замены плагина check_ping, который не работает из-за отcуствующего модуля /bin/ping 
 Требует установки пакетов bash , bc entware - opkg install bash ; opkg install bc
@@ -43,4 +45,7 @@ define service{
 
 sh /opt/etc/init/S82nagios restart
 
-
+#################################################################################################################
+# load_test.sh 
+# аналог команды check_load в стандартной поставке пакета
+#####  в работе
