@@ -204,6 +204,15 @@ while getopts "H:w:c:p:" options; do         # Цикл: выбора опций
 #  проверяем и выводим результат 
 #################################################################################################
 
+if [ -f /storage/cr_flag_$PING_HOST ]; 
+   then 
+     :
+   else
+     touch /storage/cr_flag_$PING_HOST 
+     chmod 777 /storage/cr_flag_*
+     echo "1" > /storage/cr_flag_$PING_HOST 
+fi     
+
 WL=$( echo $LEVEL_WARNING  | cut -f1 -d ',')
 WC=$( echo $LEVEL_CRITICAL | cut -f1 -d ',')
 PWL=$( echo $LEVEL_WARNING  | cut -f2 -d ',' | sed 's/%//g' )
@@ -215,11 +224,16 @@ PING_PrLOSS="$(echo "$PingOut" | grep -oP '\d+(?=% packet loss)')"
 Crst=$( /opt/bin/echo "$WCparam>$WC" | /opt/bin/bc -l )
 Wrst=$( echo "$WCparam>$WL" | /opt/bin/bc -l )
 PCrst=$( echo "$PING_PrLOSS>$PCL" | /opt/bin/bc -l )
-PWrst$( echo "$PING_PrLOSS>$PWL" | /opt/bin/bc -l )
+PWrst=$( echo "$PING_PrLOSS>$PWL" | /opt/bin/bc -l )
+
+flag=$(cat /storage/cr_flag_$PING_HOST)
 
 if [ $Crst -eq 1 ] || [ $PCrst -eq 1 ] 
   then
   echo "SERVICE STATUS: CRITICAL $PingOut"
+
+  [[ "$flag" = "0" ]] || { /opt/lib/send2tg.sh "$( echo $(date) " SERVICE STATUS: CRITICAL $PingOut")" ; echo "0" > /storage/cr_flag_$PING_HOST ; } 
+
   exit $CRITICAL
 fi
 
@@ -227,9 +241,24 @@ fi
 if [ $Wrst -eq 1 ] || [ $PWrst -eq 1 ]
   then
   echo "SERVICE STATUS: WARNING $PingOut"
+    if [ -e wr_ping_flag ]
+      then
+        :
+      else
+        echo $(date) " SERVICE STATUS: WARNING $PingOut" > wr_ping_flag
+        /opt/lib/send2tg.sh "$(cat wr_ping_flag)"
+    fi
   exit $WARNING
 fi
 
-  echo "SERVICE STATUS: OK $PingOut"
-  exit $OK
+echo $(date) "SERVICE STATUS: OK $PingOut"
+
+if [ "$flag" = "0" ]; 
+   then
+     echo "flag=$flag , cod =$?"
+     echo "1" > /storage/cr_flag_$PING_HOST
+     echo "файл /storage/cr_flag_$PING_HOST содержит $(cat /storage/cr_flag_$PING_HOST)"
+     /opt/lib/send2tg.sh "$( echo $(date) " Ping восстановлен для $PING_HOST" )"
+fi
+exit $OK
 
