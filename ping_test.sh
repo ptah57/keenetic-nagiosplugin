@@ -25,8 +25,9 @@ Crst=0                           # флаг сравнения с критиче
 Wrst=0                           # флаг сравнения с предупредительным значением параметров
 PCrst=0                          # флаг сравнения с критическим значением % потерь
 PWrst=0                          # флаг сравнения с предупредительным значением % потерь
-Flag=""                          # строка вывода 
-
+Flag=""                          # Для отдадки 4 строки вывода команды ping 
+flag=""                          # Управляющий флаг для вывода сообещенй в телеграм бот                          
+Site_Name=""                     # Название устройства для вывода статусного сообщения, из /etc/hosts
 
 # PING variables
 PING_HOST=""
@@ -138,6 +139,7 @@ echo "WC = $WC"
 echo "WL = $WL"
 echo "Crst=$Crst"
 echo "Wrst=$Wrst"
+echo "$flag -> cr_flag_$PING_HOST"
 echo "--------------------------------------------------------"
 }
 ##################################################################################################
@@ -228,11 +230,14 @@ PWrst=$( echo "$PING_PrLOSS>$PWL" | /opt/bin/bc -l )
 
 flag=$(cat /storage/cr_flag_$PING_HOST)
 
+Site_Name="$( grep $PING_HOST /etc/hosts | awk '{print $2}' )"
+
+
 if [ $Crst -eq 1 ] || [ $PCrst -eq 1 ] 
   then
-  echo "SERVICE STATUS: CRITICAL $PingOut"
+  echo "SERVICE STATUS: CRITICAL устройство $Site_Name недоступно в сети $PingOut"
 
-  [[ "$flag" = "0" ]] || { /opt/lib/send2tg.sh "$( echo $(date) " SERVICE STATUS: CRITICAL $PingOut")" ; echo "0" > /storage/cr_flag_$PING_HOST ; } 
+  [[ "$flag" = "0" ]] || { /opt/lib/send2tg.sh "$( echo $(date) " SERVICE STATUS: CRITICAL устройство $Site_Name недоступно в сети $PingOut")" ; echo "0" > /storage/cr_flag_$PING_HOST ; } 
 
   exit $CRITICAL
 fi
@@ -240,25 +245,18 @@ fi
 
 if [ $Wrst -eq 1 ] || [ $PWrst -eq 1 ]
   then
-  echo "SERVICE STATUS: WARNING $PingOut"
-    if [ -e wr_ping_flag ]
-      then
-        :
-      else
-        echo $(date) " SERVICE STATUS: WARNING $PingOut" > wr_ping_flag
-        /opt/lib/send2tg.sh "$(cat wr_ping_flag)"
-    fi
+  echo "SERVICE STATUS: WARNING у устройства $Site_Nam есть проблемы  в сети $PingOut"
   exit $WARNING
 fi
 
-echo $(date) "SERVICE STATUS: OK $PingOut"
+echo "OK: устройство ${Site_Name} доступно в сети \n $PingOut"
 
 if [ "$flag" = "0" ]; 
    then
      echo "flag=$flag , cod =$?"
      echo "1" > /storage/cr_flag_$PING_HOST
      echo "файл /storage/cr_flag_$PING_HOST содержит $(cat /storage/cr_flag_$PING_HOST)"
-     /opt/lib/send2tg.sh "$( echo $(date) " Ping восстановлен для $PING_HOST" )"
+     /opt/lib/send2tg.sh "$( echo $(date) " Ping восстановлен для $Site_Name $PING_HOST" )"
 fi
 exit $OK
 
